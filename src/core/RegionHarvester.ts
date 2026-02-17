@@ -20,6 +20,7 @@ export interface HarvestResult {
   totalCourts: number;
   uniqueCourts: number;
   duplicates: number;
+  filteredOut: number;
   byType: Record<string, number>;
   timestamp: string;
   apiStats: {
@@ -36,6 +37,7 @@ export class RegionHarvester {
   private apiClient: ApiClient;
   private config: Required<HarvesterConfig>;
   private courts: Map<string, CourtData>; // key = court code
+  private filteredOutCount: number = 0; // отфильтровано по региону
   private onProgress?: (current: number, total: number, message: string) => void;
 
   // Стратегия: типы судов для поиска
@@ -116,7 +118,8 @@ export class RegionHarvester {
       regionCode: this.config.regionCode,
       totalCourts: apiStats.successfulRequests * 10, // приблизительно
       uniqueCourts: this.courts.size,
-      duplicates: apiStats.successfulRequests * 10 - this.courts.size,
+      duplicates: apiStats.successfulRequests * 10 - this.courts.size - this.filteredOutCount,
+      filteredOut: this.filteredOutCount,
       byType: this.getStatsByType(),
       timestamp: new Date().toISOString(),
       apiStats: {
@@ -127,7 +130,8 @@ export class RegionHarvester {
     };
 
     console.log(`\n✅ Сбор завершен за ${duration}с`);
-    console.log(`📊 Уникальных судов: ${result.uniqueCourts}`);
+    console.log(`📊 Уникальных судов региона ${this.config.regionCode}: ${result.uniqueCourts}`);
+    console.log(`🚫 Отфильтровано (другие регионы): ${result.filteredOut}`);
     console.log(`🔁 Дубликатов отфильтровано: ${result.duplicates}`);
     console.log(`📡 API запросов: ${result.apiStats.totalRequests}`);
 
@@ -168,14 +172,29 @@ export class RegionHarvester {
   }
 
   /**
-   * Добавить суды с дедупликацией
+   * Добавить суды с дедупликацией и фильтрацией по региону
    */
   private addCourts(courts: CourtData[]): void {
     for (const court of courts) {
+      // Фильтруем по региону: код суда должен начинаться с кода региона
+      if (!this.belongsToRegion(court)) {
+        this.filteredOutCount++;
+        continue;
+      }
+
+      // Дедупликация
       if (!this.courts.has(court.code)) {
         this.courts.set(court.code, court);
       }
     }
+  }
+
+  /**
+   * Проверяет, принадлежит ли суд указанному региону
+   */
+  private belongsToRegion(court: CourtData): boolean {
+    // Код суда начинается с кода региона (например, 59RS0001)
+    return court.code.startsWith(this.config.regionCode);
   }
 
   /**
