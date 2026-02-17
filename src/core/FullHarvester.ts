@@ -314,7 +314,8 @@ export class FullHarvester {
     console.log(`\n🔍 Пускаем дополнительные ${queries.length} запросы...\n`);
     
     for (const query of queries) {
-      const results = await this.apiClient.searchCourts(query);
+            const response = await this.apiClient.suggestCourt(query);
+            const results = response.suggestions || [];
       
       for (const court of results) {
         if (!this.courts.has(court.id)) {
