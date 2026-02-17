@@ -3,6 +3,7 @@ import { CourtData } from '../types/dadata';
 import { promises as fs } from 'fs';
 import path from 'path';
 
+
 export interface FullHarvesterConfig {
   outputDir?: string;
   batchDelay?: number;
@@ -10,6 +11,7 @@ export interface FullHarvesterConfig {
   maxDepth?: number;
   checkpointInterval?: number;
 }
+
 
 export interface FullHarvestResult {
   totalCourts: number;
@@ -27,6 +29,7 @@ export interface FullHarvestResult {
   };
 }
 
+
 export class FullHarvester {
   private apiClient: ApiClient;
   private config: Required<FullHarvesterConfig>;
@@ -37,8 +40,10 @@ export class FullHarvester {
   private detailsExpanded: number = 0;
   private onProgress?: (current: number, total: number, message: string) => void;
 
+
   private readonly ALPHABET = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ'.split('');
   private readonly MAX_RESULTS_PER_QUERY = 20;
+
 
   constructor(apiClient: ApiClient, config: FullHarvesterConfig = {}) {
     this.apiClient = apiClient;
@@ -54,24 +59,30 @@ export class FullHarvester {
     this.hotPrefixes = new Set();
   }
 
+
   setProgressCallback(callback: (current: number, total: number, message: string) => void): void {
     this.onProgress = callback;
   }
+
 
   async harvest(): Promise<FullHarvestResult> {
     console.log('\n🌍 Запуск полного сбора всех судов РФ\n');
     console.log(`⚙️  Максимальная глубина детализации: ${this.config.maxDepth}`);
     console.log(`🔤 Чекпоинты каждые ${this.config.checkpointInterval} запросов\n`);
 
+
     const startTime = Date.now();
+
 
     // Уровень 1: Однобуквенный
     await this.searchByDepth(1);
+
 
     // Уровень 2: Двухбуквенный
     if (this.config.maxDepth >= 2) {
       await this.searchByDepth(2);
     }
+
 
     // Уровень 3: Только "горячие" префиксы
     if (this.config.maxDepth >= 3 && this.hotPrefixes.size > 0) {
@@ -79,12 +90,15 @@ export class FullHarvester {
       await this.expandHotPrefixes();
     }
 
+
     // Финальное сохранение
     console.log('\n💾 Сохранение финальных результатов...');
     await this.saveResults('courts_full.json');
 
+
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     const apiStats = this.apiClient.getStats();
+
 
     const result: FullHarvestResult = {
       totalCourts: this.queriesExecuted * this.MAX_RESULTS_PER_QUERY,
@@ -102,6 +116,7 @@ export class FullHarvester {
       },
     };
 
+
     console.log(`\n✅ Сбор завершён за ${duration}с`);
     console.log(`📊 Уникальных судов: ${result.uniqueCourts}`);
     console.log(`🔁 Дубликатов: ${result.duplicates}`);
@@ -109,12 +124,15 @@ export class FullHarvester {
     console.log(`🔥 "Горячих" префиксов: ${this.hotPrefixes.size}`);
     console.log(`\n🌍 Покрытие по регионам: ${Object.keys(result.byRegion).length} регионов`);
 
+
     return result;
   }
+
 
   private async searchByDepth(depth: number): Promise<void> {
     const queries = this.generateQueries(depth);
     console.log(`\n🔍 Уровень ${depth}: генерируем ${queries.length} запросов...\n`);
+
 
     for (let i = 0; i < queries.length; i++) {
       const query = queries[i];
@@ -123,10 +141,12 @@ export class FullHarvester {
         continue;
       }
 
+
       this.reportProgress(i + 1, queries.length, `Уровень ${depth}: "${query}"`);
       
       const count = await this.searchAndAdd(query);
       this.processedQueries.add(query);
+
 
       // Если получили MAX - помечаем как "горячий"
       if (count === this.MAX_RESULTS_PER_QUERY && depth === 2) {
@@ -137,14 +157,17 @@ export class FullHarvester {
         }
       }
 
+
       // Чекпоинт
       if (this.queriesExecuted % this.config.checkpointInterval === 0) {
         await this.saveCheckpoint();
       }
 
+
       await this.delay(this.config.batchDelay);
     }
   }
+
 
   /**
    * Детализация "горячих" префиксов
@@ -155,6 +178,7 @@ export class FullHarvester {
     
     console.log(`📊 Ожидаемый объём: ${totalQueries} запросов\n`);
 
+
     let executed = 0;
     for (const prefix of hotArray) {
       for (const letter of this.ALPHABET) {
@@ -164,29 +188,35 @@ export class FullHarvester {
           continue;
         }
 
+
         executed++;
         this.reportProgress(executed, totalQueries, `Детализация: "${query}"`);
         
         await this.searchAndAdd(query);
         this.processedQueries.add(query);
 
+
         // Чекпоинт
         if (this.queriesExecuted % this.config.checkpointInterval === 0) {
           await this.saveCheckpoint();
         }
+
 
         await this.delay(this.config.batchDelay);
       }
     }
   }
 
+
   private generateQueries(depth: number): string[] {
     if (depth === 1) {
       return this.ALPHABET;
     }
 
+
     const queries: string[] = [];
     const base = this.generateQueries(depth - 1);
+
 
     for (const prefix of base) {
       for (const letter of this.ALPHABET) {
@@ -194,8 +224,10 @@ export class FullHarvester {
       }
     }
 
+
     return queries;
   }
+
 
   private async searchAndAdd(query: string): Promise<number> {
     try {
@@ -203,11 +235,14 @@ export class FullHarvester {
         count: this.MAX_RESULTS_PER_QUERY,
       });
 
+
       this.queriesExecuted++;
+
 
       if (this.config.debug && response.suggestions.length > 0) {
         console.log(`  "${query}": ${response.suggestions.length} рез-в`);
       }
+
 
       for (const suggestion of response.suggestions) {
         const court = suggestion.data;
@@ -221,6 +256,7 @@ export class FullHarvester {
         }
       }
 
+
       return response.suggestions.length;
     } catch (error) {
       console.error(`⚠️  Ошибка при запросе "${query}":`, error);
@@ -228,15 +264,18 @@ export class FullHarvester {
     }
   }
 
+
   private async saveCheckpoint(): Promise<void> {
     await this.saveResults('courts_checkpoint.json');
     console.log(`\n🔤 Чекпоинт: ${this.courts.size} судов, ${this.queriesExecuted} запросов\n`);
   }
 
+
   private async saveResults(filename: string): Promise<void> {
     await fs.mkdir(this.config.outputDir, { recursive: true });
     const outputPath = path.join(this.config.outputDir, filename);
     const courtsArray = Array.from(this.courts.values());
+
 
     const output = {
       meta: {
@@ -250,12 +289,14 @@ export class FullHarvester {
       courts: courtsArray,
     };
 
+
     await fs.writeFile(outputPath, JSON.stringify(output, null, 2), 'utf-8');
     
     if (this.config.debug) {
       console.log(`💾 Сохранено: ${outputPath}`);
     }
   }
+
 
   private getStatsByRegion(): Record<string, number> {
     const stats: Record<string, number> = {};
@@ -270,6 +311,7 @@ export class FullHarvester {
     return stats;
   }
 
+
   private getStatsByType(): Record<string, number> {
     const stats: Record<string, number> = {};
     for (const court of this.courts.values()) {
@@ -279,29 +321,32 @@ export class FullHarvester {
     return stats;
   }
 
+
   private reportProgress(current: number, total: number, message: string): void {
     if (this.onProgress) {
       this.onProgress(current, total, message);
     }
   }
 
+
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+
   getCourts(): CourtData[] {
     return Array.from(this.courts.values());
+  }
 
-      }
 
-    async loadFromFile(filename: string): Promise<void> {
+  async loadFromFile(filename: string): Promise<void> {
     try {
       const filepath = path.join(this.config.outputDir, filename);
-      const data = await promises.readFile(filepath, 'utf-8');
+      const data = await fs.readFile(filepath, 'utf-8');
       const json = JSON.parse(data);
       
       if (json.courts && Array.isArray(json.courts)) {
-        this.courts = new Map(json.courts.map((c: any) => [c.id, c]));
+        this.courts = new Map(json.courts.map((c: any) => [c.code, c]));
         console.log(`✅ Загружено ${this.courts.size} судов из ${filename}`);
       }
     } catch (error) {
@@ -310,16 +355,18 @@ export class FullHarvester {
     }
   }
 
-    async runExtraQueries(queries: string[]): Promise<void> {
+
+  async runExtraQueries(queries: string[]): Promise<void> {
     console.log(`\n🔍 Пускаем дополнительные ${queries.length} запросы...\n`);
     
     for (const query of queries) {
-            const response = await this.apiClient.suggestCourt(query);
-            const results = response.suggestions || [];
+      const response = await this.apiClient.suggestCourt(query);
+      const results = response.suggestions || [];
       
-      for (const court of results) {
-        if (!this.courts.has(court.id)) {
-          this.courts.set(court.id, court);
+      for (const suggestion of results) {
+        const court = suggestion.data;
+        if (!this.courts.has(court.code)) {
+          this.courts.set(court.code, court);
           this.onProgress?.(this.courts.size, queries.length, `Added: ${court.name}`);
         }
       }
@@ -330,8 +377,6 @@ export class FullHarvester {
     console.log(`\n✅ Готово! Всего уникальных судов: ${this.courts.size}\n`);
     
     // Сохраняем результаты фазы 4
-    await this.saveResults();
+    await this.saveResults('courts_full_phase4.json');
   }
-  }
-
-    
+}

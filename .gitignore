@@ -120,3 +120,5 @@ Thumbs.db
 data/
 !data/.gitkeep
 dist/
+
+копия.env
