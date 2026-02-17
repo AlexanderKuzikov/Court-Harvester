@@ -121,4 +121,5 @@ data/
 !data/.gitkeep
 dist/
 
-копия.env
+# API Keys folder
+keys/
