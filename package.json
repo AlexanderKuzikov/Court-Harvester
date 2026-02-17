@@ -7,8 +7,10 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx",
+    "start": "tsx src/index.ts",
+    "harvest:59": "tsx src/index.ts harvest --region 59",
     "example:test-client": "tsx src/examples/test-client.ts",
-    "start": "node dist/index.js",
+    "example:test-harvester": "tsx src/examples/test-harvester.ts",
     "test": "vitest",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\""
