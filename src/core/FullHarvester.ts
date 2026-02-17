@@ -197,6 +197,12 @@ export class FullHarvester {
 
       for (const suggestion of response.suggestions) {
         const court = suggestion.data;
+        
+        // Пропускаем суды без кода
+        if (!court.code) {
+          continue;
+        }
+        
         if (!this.courts.has(court.code)) {
           this.courts.set(court.code, court);
         }
@@ -214,7 +220,7 @@ export class FullHarvester {
    */
   private async saveCheckpoint(): Promise<void> {
     await this.saveResults('courts_checkpoint.json');
-    console.log(`🔤 Чекпоинт: ${this.courts.size} судов, ${this.queriesExecuted} запросов`);
+    console.log(`\n🔤 Чекпоинт: ${this.courts.size} судов, ${this.queriesExecuted} запросов\n`);
   }
 
   /**
@@ -250,6 +256,11 @@ export class FullHarvester {
   private getStatsByRegion(): Record<string, number> {
     const stats: Record<string, number> = {};
     for (const court of this.courts.values()) {
+      // Пропускаем суды без кода
+      if (!court.code) {
+        continue;
+      }
+      
       const regionCode = court.code.substring(0, 2);
       stats[regionCode] = (stats[regionCode] || 0) + 1;
     }
