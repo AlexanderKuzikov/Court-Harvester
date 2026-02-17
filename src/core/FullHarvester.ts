@@ -3,20 +3,14 @@ import { CourtData } from '../types/dadata';
 import { promises as fs } from 'fs';
 import path from 'path';
 
-/**
- * Конфигурация полного сборщика
- */
 export interface FullHarvesterConfig {
   outputDir?: string;
   batchDelay?: number;
   debug?: boolean;
-  maxDepth?: number; // макс. глубина детализации (1-3)
-  checkpointInterval?: number; // сохранять прогресс каждые N запросов
+  maxDepth?: number;
+  checkpointInterval?: number;
 }
 
-/**
- * Результат полного сбора
- */
 export interface FullHarvestResult {
   totalCourts: number;
   uniqueCourts: number;
@@ -33,22 +27,18 @@ export interface FullHarvestResult {
   };
 }
 
-/**
- * Полный сборщик всех судов РФ
- * Использует многоуровневую алфавитную стратегию
- */
 export class FullHarvester {
   private apiClient: ApiClient;
   private config: Required<FullHarvesterConfig>;
   private courts: Map<string, CourtData>;
   private processedQueries: Set<string>;
+  private hotPrefixes: Set<string>; // префиксы для детализации
   private queriesExecuted: number = 0;
   private detailsExpanded: number = 0;
   private onProgress?: (current: number, total: number, message: string) => void;
 
-  // Русский алфавит
   private readonly ALPHABET = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ'.split('');
-  private readonly MAX_RESULTS_PER_QUERY = 20; // лимит DaData
+  private readonly MAX_RESULTS_PER_QUERY = 20;
 
   constructor(apiClient: ApiClient, config: FullHarvesterConfig = {}) {
     this.apiClient = apiClient;
@@ -61,15 +51,13 @@ export class FullHarvester {
     };
     this.courts = new Map();
     this.processedQueries = new Set();
+    this.hotPrefixes = new Set();
   }
 
   setProgressCallback(callback: (current: number, total: number, message: string) => void): void {
     this.onProgress = callback;
   }
 
-  /**
-   * Запустить полный сбор
-   */
   async harvest(): Promise<FullHarvestResult> {
     console.log('\n🌍 Запуск полного сбора всех судов РФ\n');
     console.log(`⚙️  Максимальная глубина детализации: ${this.config.maxDepth}`);
@@ -77,18 +65,18 @@ export class FullHarvester {
 
     const startTime = Date.now();
 
-    // Уровень 1: Однобуквенный поиск
+    // Уровень 1: Однобуквенный
     await this.searchByDepth(1);
 
-    // Уровень 2: Двухбуквенный поиск
+    // Уровень 2: Двухбуквенный
     if (this.config.maxDepth >= 2) {
       await this.searchByDepth(2);
     }
 
-    // Уровень 3: Трёхбуквенный (только для "горячих")
-    if (this.config.maxDepth >= 3) {
-      console.log('\n🔍 Уровень 3: Детализация "горячих" префиксов...');
-      // TODO: реализуем позже
+    // Уровень 3: Только "горячие" префиксы
+    if (this.config.maxDepth >= 3 && this.hotPrefixes.size > 0) {
+      console.log(`\n🔥 Уровень 3: Детализация ${this.hotPrefixes.size} "горячих" префиксов\n`);
+      await this.expandHotPrefixes();
     }
 
     // Финальное сохранение
@@ -118,15 +106,12 @@ export class FullHarvester {
     console.log(`📊 Уникальных судов: ${result.uniqueCourts}`);
     console.log(`🔁 Дубликатов: ${result.duplicates}`);
     console.log(`🔍 Запросов выполнено: ${result.queriesExecuted}`);
-    console.log(`🔥 Детализаций: ${result.detailsExpanded}`);
+    console.log(`🔥 "Горячих" префиксов: ${this.hotPrefixes.size}`);
     console.log(`\n🌍 Покрытие по регионам: ${Object.keys(result.byRegion).length} регионов`);
 
     return result;
   }
 
-  /**
-   * Поиск по уровню глубины
-   */
   private async searchByDepth(depth: number): Promise<void> {
     const queries = this.generateQueries(depth);
     console.log(`\n🔍 Уровень ${depth}: генерируем ${queries.length} запросов...\n`);
@@ -135,7 +120,7 @@ export class FullHarvester {
       const query = queries[i];
       
       if (this.processedQueries.has(query)) {
-        continue; // уже обработан
+        continue;
       }
 
       this.reportProgress(i + 1, queries.length, `Уровень ${depth}: "${query}"`);
@@ -143,11 +128,12 @@ export class FullHarvester {
       const count = await this.searchAndAdd(query);
       this.processedQueries.add(query);
 
-      // Если получили MAX результатов - возможно есть ещё!
-      if (count === this.MAX_RESULTS_PER_QUERY && depth < this.config.maxDepth) {
+      // Если получили MAX - помечаем как "горячий"
+      if (count === this.MAX_RESULTS_PER_QUERY && depth === 2) {
+        this.hotPrefixes.add(query);
         this.detailsExpanded++;
         if (this.config.debug) {
-          console.log(`  🔥 "${query}" вернул ${count} - нужна детализация!`);
+          console.log(`  🔥 "${query}" вернул ${count} - помечен для детализации`);
         }
       }
 
@@ -161,8 +147,39 @@ export class FullHarvester {
   }
 
   /**
-   * Генерация запросов по глубине
+   * Детализация "горячих" префиксов
    */
+  private async expandHotPrefixes(): Promise<void> {
+    const hotArray = Array.from(this.hotPrefixes);
+    const totalQueries = hotArray.length * this.ALPHABET.length;
+    
+    console.log(`📊 Ожидаемый объём: ${totalQueries} запросов\n`);
+
+    let executed = 0;
+    for (const prefix of hotArray) {
+      for (const letter of this.ALPHABET) {
+        const query = prefix + letter;
+        
+        if (this.processedQueries.has(query)) {
+          continue;
+        }
+
+        executed++;
+        this.reportProgress(executed, totalQueries, `Детализация: "${query}"`);
+        
+        await this.searchAndAdd(query);
+        this.processedQueries.add(query);
+
+        // Чекпоинт
+        if (this.queriesExecuted % this.config.checkpointInterval === 0) {
+          await this.saveCheckpoint();
+        }
+
+        await this.delay(this.config.batchDelay);
+      }
+    }
+  }
+
   private generateQueries(depth: number): string[] {
     if (depth === 1) {
       return this.ALPHABET;
@@ -180,9 +197,6 @@ export class FullHarvester {
     return queries;
   }
 
-  /**
-   * Поиск и добавление судов
-   */
   private async searchAndAdd(query: string): Promise<number> {
     try {
       const response = await this.apiClient.suggestCourt(query, {
@@ -198,7 +212,6 @@ export class FullHarvester {
       for (const suggestion of response.suggestions) {
         const court = suggestion.data;
         
-        // Пропускаем суды без кода
         if (!court.code) {
           continue;
         }
@@ -215,17 +228,11 @@ export class FullHarvester {
     }
   }
 
-  /**
-   * Сохранение чекпоинта
-   */
   private async saveCheckpoint(): Promise<void> {
     await this.saveResults('courts_checkpoint.json');
     console.log(`\n🔤 Чекпоинт: ${this.courts.size} судов, ${this.queriesExecuted} запросов\n`);
   }
 
-  /**
-   * Сохранение результатов
-   */
   private async saveResults(filename: string): Promise<void> {
     await fs.mkdir(this.config.outputDir, { recursive: true });
     const outputPath = path.join(this.config.outputDir, filename);
@@ -250,13 +257,9 @@ export class FullHarvester {
     }
   }
 
-  /**
-   * Статистика по регионам
-   */
   private getStatsByRegion(): Record<string, number> {
     const stats: Record<string, number> = {};
     for (const court of this.courts.values()) {
-      // Пропускаем суды без кода
       if (!court.code) {
         continue;
       }
@@ -267,9 +270,6 @@ export class FullHarvester {
     return stats;
   }
 
-  /**
-   * Статистика по типам
-   */
   private getStatsByType(): Record<string, number> {
     const stats: Record<string, number> = {};
     for (const court of this.courts.values()) {
