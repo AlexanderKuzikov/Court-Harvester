@@ -293,7 +293,8 @@ export class FullHarvester {
     return Array.from(this.courts.values());
 
       }
+  }
+}
 
     
-  }
 }
