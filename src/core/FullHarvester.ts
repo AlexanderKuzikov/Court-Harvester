@@ -291,5 +291,75 @@ export class FullHarvester {
 
   getCourts(): CourtData[] {
     return Array.from(this.courts.values());
+
+      /**
+   * Загрузить уже собранные суды из файла
+   */
+  async loadFromFile(filename = 'courts_full.json'): Promise<void> {
+    const fullPath = path.join(this.config.outputDir, filename);
+    try {
+      const content = await fs.promises.readFile(fullPath, 'utf-8');
+      const json = JSON.parse(content) as { courts?: CourtData[] };
+
+      if (!json.courts || !Array.isArray(json.courts)) {
+        console.warn(`⚠️ Файл ${fullPath} не содержит массива courts`);
+        return;
+      }
+
+      let loaded = 0;
+      for (const court of json.courts) {
+        if (!court.code) continue;
+        if (!this.courts.has(court.code)) {
+          this.courts.set(court.code, court);
+          loaded++;
+        }
+      }
+
+      console.log(
+        `📂 Загружено из ${filename}: ${loaded} судов, всего в Map: ${this.courts.size}`,
+      );
+    } catch (e) {
+      console.warn(`⚠️ Не удалось загрузить ${fullPath}:`, e);
+    }
+  }
+
+  /**
+   * Выполнить дополнительную фазу поиска по заранее заданным запросам
+   */
+  async runExtraQueries(queries: string[]): Promise<void> {
+    console.log(`\n🔎 Фаза 4: дополнительные запросы (${queries.length})\n`);
+
+    for (let i = 0; i < queries.length; i++) {
+      const query = queries[i];
+
+      this.reportProgress(i + 1, queries.length, `Фаза 4: "${query}"`);
+
+      const count = await this.searchAndAdd(query);
+
+      if (this.config.debug) {
+        console.log(`  "${query}" → ${count} результатов`);
+      }
+
+      if (this.queriesExecuted % this.config.checkpointInterval === 0) {
+        await this.saveCheckpoint();
+      }
+
+      await this.delay(this.config.batchDelay);
+    }
+
+    await this.saveResults('courts_full_phase4.json');
+    console.log(
+      `\n✅ Фаза 4 завершена. Всего уникальных судов: ${this.courts.size}\n`,
+    );
+  }
+
+  /**
+   * Установить callback для прогресса
+   */
+  setProgressCallback(callback: (current: number, total: number, message: string) => void): void {
+    this.onProgress = callback;
+  }
+
+    
   }
 }
