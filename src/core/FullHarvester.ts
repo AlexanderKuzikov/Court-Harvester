@@ -293,6 +293,44 @@ export class FullHarvester {
     return Array.from(this.courts.values());
 
       }
+
+    async loadFromFile(filename: string): Promise<void> {
+    try {
+      const filepath = path.join(this.config.outputDir, filename);
+      const data = await promises.readFile(filepath, 'utf-8');
+      const json = JSON.parse(data);
+      
+      if (json.courts && Array.isArray(json.courts)) {
+        this.courts = new Map(json.courts.map((c: any) => [c.id, c]));
+        console.log(`✅ Загружено ${this.courts.size} судов из ${filename}`);
+      }
+    } catch (error) {
+      console.error(`⚠️  Файл ${filename} не найден, начинаем с пустого набора`);
+      this.courts = new Map();
+    }
+  }
+
+    async runExtraQueries(queries: string[]): Promise<void> {
+    console.log(`\n🔍 Пускаем дополнительные ${queries.length} запросы...\n`);
+    
+    for (const query of queries) {
+      const results = await this.apiClient.searchCourts(query);
+      
+      for (const court of results) {
+        if (!this.courts.has(court.id)) {
+          this.courts.set(court.id, court);
+          this.onProgress?.(this.courts.size, queries.length, `Added: ${court.name}`);
+        }
+      }
+      
+      await this.delay(this.config.batchDelay);
+    }
+    
+    console.log(`\n✅ Готово! Всего уникальных судов: ${this.courts.size}\n`);
+    
+    // Сохраняем результаты фазы 4
+    await this.saveResults();
+  }
   }
 
     
