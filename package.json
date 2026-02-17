@@ -27,7 +27,11 @@
     "check-ai": "tsx src/examples/check-ai-courts.ts",
     "sort-export": "tsx src/examples/sort-and-export.ts",
     "check-region-00": "tsx src/examples/check-region-00.ts",
-    "test-vs": "tsx src/examples/test-vs-search.ts"
+    "test-vs": "tsx src/examples/test-vs-search.ts",
+    "harvest:full:phase8": "tsx src/examples/test-full-phase8.ts",
+    "analyze-regions": "tsx src/examples/analyze-regions.ts",
+    "harvest:full:phase9b": "tsx src/examples/test-full-phase9b.ts"
+
   },
   "keywords": [
     "dadata",
