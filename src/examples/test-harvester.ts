@@ -23,11 +23,12 @@ async function main() {
       secretKey: process.env.DADATA_SECRET_KEY,
     });
 
-    // Инициализация харвестера
+    // Инициализация харвестера с DEBUG режимом
     const harvester = new RegionHarvester(apiClient, {
       regionCode: '59',
       outputDir: './data',
-      batchDelay: 100, // мс между батчами
+      batchDelay: 100,
+      debug: true, // ВКЛЮЧАЕМ DEBUG
     });
 
     // Progress callback
