@@ -13,6 +13,7 @@
     "harvest:full:phase4": "tsx src/examples/test-full-phase4.ts",
     "harvest:full:phase5": "tsx src/examples/test-full-phase5.ts",
     "harvest:full:phase6": "tsx src/examples/test-full-phase6.ts",
+    "harvest:full:phase7": "tsx src/examples/test-full-phase7.ts",
     "find-gaps": "tsx src/examples/find-gaps.ts",
     "test-missing": "tsx src/examples/test-missing-codes.ts",
     "count-prefixes": "tsx src/examples/count-prefixes.ts",
@@ -22,7 +23,8 @@
     "example:test-pagination": "tsx src/examples/test-pagination.ts",
     "test": "vitest",
     "lint": "eslint src --ext .ts",
-    "format": "prettier --write \"src/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\"",
+    "check-ai": "tsx src/examples/check-ai-courts.ts"
   },
   "keywords": [
     "dadata",
