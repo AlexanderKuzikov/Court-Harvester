@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "dev": "tsx src/index.ts",
+    "dev": "tsx",
+    "example:test-client": "tsx src/examples/test-client.ts",
     "start": "node dist/index.js",
     "test": "vitest",
     "lint": "eslint src --ext .ts",
