@@ -294,7 +294,6 @@ export class FullHarvester {
 
       }
   }
-}
 
     
 }
