@@ -69,6 +69,7 @@ export class ApiClient {
   private limiter: Bottleneck;
   private config: Required<ApiClientConfig>;
   private stats: ClientStats;
+  private requestCounter: number;
 
   constructor(config: ApiClientConfig) {
     // Дефолтные значения конфигурации
@@ -91,6 +92,9 @@ export class ApiClient {
       failedRequests: 0,
       quotaErrors: 0,
     };
+
+    // Счетчик для уникальных ID задач
+    this.requestCounter = 0;
 
     // Инициализация Axios
     this.axiosInstance = axios.create({
@@ -184,8 +188,11 @@ export class ApiClient {
     // Инкрементируем счетчик запросов
     this.stats.totalRequests++;
 
+    // Генерируем уникальный ID для задачи
+    const jobId = `court-${Date.now()}-${++this.requestCounter}`;
+
     // Выполняем запрос через rate limiter
-    return this.limiter.schedule({ id: `court-${Date.now()}` }, async () => {
+    return this.limiter.schedule({ id: jobId }, async () => {
       try {
         const response = await this.axiosInstance.post<DaDataResponse<CourtData>>(
           '/suggest/court',
