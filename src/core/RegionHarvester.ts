@@ -9,7 +9,8 @@ import path from 'path';
 export interface HarvesterConfig {
   regionCode: string;
   outputDir?: string;
-  batchDelay?: number; // задержка между батчами (мс)
+  batchDelay?: number;
+  debug?: boolean; // включить debug-логирование
 }
 
 /**
@@ -36,23 +37,22 @@ export interface HarvestResult {
 export class RegionHarvester {
   private apiClient: ApiClient;
   private config: Required<HarvesterConfig>;
-  private courts: Map<string, CourtData>; // key = court code
-  private filteredOutCount: number = 0; // отфильтровано по региону
+  private courts: Map<string, CourtData>;
+  private filteredOutCount: number = 0;
+  private receivedCount: number = 0;
   private onProgress?: (current: number, total: number, message: string) => void;
 
-  // Стратегия: типы судов для поиска
   private readonly COURT_TYPES: CourtType[] = [
-    'RS', // Районный, городской
-    'MS', // Мировой суд
-    'AS', // Арбитражный субъекта
-    'OS', // Областной
-    'KJ', // Кассационный общей юрисдикции
-    'AJ', // Апелляционный общей юрисдикции
-    'GV', // Гарнизонный военный
-    'OV', // Окружной военный
+    'RS',
+    'MS',
+    'AS',
+    'OS',
+    'KJ',
+    'AJ',
+    'GV',
+    'OV',
   ];
 
-  // Ключевые слова для поиска
   private readonly SEARCH_QUERIES = [
     'суд',
     'мировой',
@@ -66,20 +66,15 @@ export class RegionHarvester {
       regionCode: config.regionCode,
       outputDir: config.outputDir || './data',
       batchDelay: config.batchDelay || 100,
+      debug: config.debug || false,
     };
     this.courts = new Map();
   }
 
-  /**
-   * Установить callback для отслеживания прогресса
-   */
   setProgressCallback(callback: (current: number, total: number, message: string) => void): void {
     this.onProgress = callback;
   }
 
-  /**
-   * Запустить сбор судов по региону
-   */
   async harvest(): Promise<HarvestResult> {
     console.log(`\n🌾 Запуск сбора судов для региона ${this.config.regionCode}\n`);
 
@@ -87,27 +82,22 @@ export class RegionHarvester {
     let currentStep = 0;
     const totalSteps = this.COURT_TYPES.length + this.SEARCH_QUERIES.length;
 
-    // Шаг 1: Поиск по типам судов
     console.log('🔍 Шаг 1: Поиск по типам судов...');
     for (const courtType of this.COURT_TYPES) {
       currentStep++;
       this.reportProgress(currentStep, totalSteps, `Поиск ${courtType}`);
-
       await this.searchByType(courtType);
       await this.delay(this.config.batchDelay);
     }
 
-    // Шаг 2: Поиск по ключевым словам
     console.log('\n🔍 Шаг 2: Поиск по ключевым словам...');
     for (const query of this.SEARCH_QUERIES) {
       currentStep++;
       this.reportProgress(currentStep, totalSteps, `Поиск "${query}"`);
-
       await this.searchByQuery(query);
       await this.delay(this.config.batchDelay);
     }
 
-    // Сохранение результатов
     console.log('\n💾 Сохранение результатов...');
     await this.saveResults();
 
@@ -116,9 +106,9 @@ export class RegionHarvester {
 
     const result: HarvestResult = {
       regionCode: this.config.regionCode,
-      totalCourts: apiStats.successfulRequests * 10, // приблизительно
+      totalCourts: this.receivedCount,
       uniqueCourts: this.courts.size,
-      duplicates: apiStats.successfulRequests * 10 - this.courts.size - this.filteredOutCount,
+      duplicates: this.receivedCount - this.courts.size - this.filteredOutCount,
       filteredOut: this.filteredOutCount,
       byType: this.getStatsByType(),
       timestamp: new Date().toISOString(),
@@ -130,17 +120,15 @@ export class RegionHarvester {
     };
 
     console.log(`\n✅ Сбор завершен за ${duration}с`);
+    console.log(`📡 Получено от API: ${result.totalCourts}`);
     console.log(`📊 Уникальных судов региона ${this.config.regionCode}: ${result.uniqueCourts}`);
     console.log(`🚫 Отфильтровано (другие регионы): ${result.filteredOut}`);
-    console.log(`🔁 Дубликатов отфильтровано: ${result.duplicates}`);
+    console.log(`🔁 Дубликатов: ${result.duplicates}`);
     console.log(`📡 API запросов: ${result.apiStats.totalRequests}`);
 
     return result;
   }
 
-  /**
-   * Поиск по типу суда
-   */
   private async searchByType(courtType: CourtType): Promise<void> {
     try {
       const response = await this.apiClient.suggestCourt('', {
@@ -149,15 +137,17 @@ export class RegionHarvester {
         count: 20,
       });
 
+      if (this.config.debug && response.suggestions.length > 0) {
+        console.log(`\n[DEBUG] ${courtType}: получено ${response.suggestions.length} судов`);
+        console.log('[DEBUG] Примеры кодов:', response.suggestions.slice(0, 3).map(s => s.data.code).join(', '));
+      }
+
       this.addCourts(response.suggestions.map(s => s.data));
     } catch (error) {
       console.error(`⚠️  Ошибка при поиске ${courtType}:`, error);
     }
   }
 
-  /**
-   * Поиск по ключевому слову
-   */
   private async searchByQuery(query: string): Promise<void> {
     try {
       const response = await this.apiClient.suggestCourt(query, {
@@ -165,45 +155,71 @@ export class RegionHarvester {
         count: 20,
       });
 
+      if (this.config.debug && response.suggestions.length > 0) {
+        console.log(`\n[DEBUG] "${query}": получено ${response.suggestions.length} судов`);
+        console.log('[DEBUG] Примеры кодов:', response.suggestions.slice(0, 3).map(s => s.data.code).join(', '));
+      }
+
       this.addCourts(response.suggestions.map(s => s.data));
     } catch (error) {
       console.error(`⚠️  Ошибка при поиске "${query}":`, error);
     }
   }
 
-  /**
-   * Добавить суды с дедупликацией и фильтрацией по региону
-   */
   private addCourts(courts: CourtData[]): void {
     for (const court of courts) {
-      // Фильтруем по региону: код суда должен начинаться с кода региона
+      this.receivedCount++;
+
+      // Фильтр по региону
       if (!this.belongsToRegion(court)) {
         this.filteredOutCount++;
+        if (this.config.debug) {
+          console.log(`[DEBUG] Отфильтрован: ${court.code} - ${court.name.substring(0, 50)}...`);
+        }
         continue;
       }
 
       // Дедупликация
       if (!this.courts.has(court.code)) {
         this.courts.set(court.code, court);
+        if (this.config.debug) {
+          console.log(`[DEBUG] Добавлен: ${court.code} - ${court.name.substring(0, 50)}...`);
+        }
       }
     }
   }
 
   /**
-   * Проверяет, принадлежит ли суд указанному региону
+   * Проверяет принадлежность суда к региону
+   * Проверяем:
+   * 1. Код суда начинается с кода региона (59RS0001)
+   * 2. Адрес содержит название региона (запасной вариант)
    */
   private belongsToRegion(court: CourtData): boolean {
-    // Код суда начинается с кода региона (например, 59RS0001)
-    return court.code.startsWith(this.config.regionCode);
+    // Основной способ: код суда
+    if (court.code.startsWith(this.config.regionCode)) {
+      return true;
+    }
+
+    // Запасной способ: поиск по адресу
+    // Для Пермского края (59) - "Перм"
+    const regionNames: Record<string, string[]> = {
+      '59': ['Перм', 'Пермск'],
+      '77': ['Москв'],
+      '78': ['Санкт-Петербург'],
+    };
+
+    const names = regionNames[this.config.regionCode];
+    if (names) {
+      const address = court.address.toLowerCase();
+      return names.some(name => address.includes(name.toLowerCase()));
+    }
+
+    return false;
   }
 
-  /**
-   * Сохранить результаты в JSON
-   */
   private async saveResults(): Promise<void> {
-    // Создаем директорию если не существует
     await fs.mkdir(this.config.outputDir, { recursive: true });
-
     const outputPath = path.join(this.config.outputDir, `courts_${this.config.regionCode}.json`);
     const courtsArray = Array.from(this.courts.values());
 
@@ -221,9 +237,6 @@ export class RegionHarvester {
     console.log(`💾 Сохранено: ${outputPath}`);
   }
 
-  /**
-   * Получить статистику по типам
-   */
   private getStatsByType(): Record<string, number> {
     const stats: Record<string, number> = {};
     for (const court of this.courts.values()) {
@@ -233,25 +246,16 @@ export class RegionHarvester {
     return stats;
   }
 
-  /**
-   * Отчет о прогрессе
-   */
   private reportProgress(current: number, total: number, message: string): void {
     if (this.onProgress) {
       this.onProgress(current, total, message);
     }
   }
 
-  /**
-   * Задержка
-   */
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  /**
-   * Получить собранные суды
-   */
   getCourts(): CourtData[] {
     return Array.from(this.courts.values());
   }
