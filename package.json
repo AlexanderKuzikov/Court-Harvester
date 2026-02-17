@@ -10,6 +10,7 @@
     "start": "tsx src/index.ts",
     "harvest:59": "tsx src/index.ts harvest --region 59",
     "harvest:full": "tsx src/examples/test-full-harvester.ts",
+        "harvest:full:phase4": "tsx src/examples/test-full-phase4.ts",
     "example:test-client": "tsx src/examples/test-client.ts",
     "example:test-harvester": "tsx src/examples/test-harvester.ts",
     "example:test-pagination": "tsx src/examples/test-pagination.ts",
