@@ -4,6 +4,7 @@ import { FullHarvester } from '../core/FullHarvester';
 
 /**
  * Пример полного сбора всех судов РФ
+ * С умной детализацией уровня 3
  */
 async function main() {
   console.log('\n🌍 Court-Harvester - Полный сбор всех судов РФ\n');
@@ -23,9 +24,9 @@ async function main() {
     const harvester = new FullHarvester(apiClient, {
       outputDir: './data',
       batchDelay: 50, // мс между запросами
-      maxDepth: 2, // пока только 2 уровня
-      checkpointInterval: 100, // чекпоинт каждые 100 запросов
-      debug: false, // отключаем debug для чистоты вывода
+      maxDepth: 3, // ВКЛЮЧАЕМ УРОВЕНЬ 3!
+      checkpointInterval: 100,
+      debug: false,
     });
 
     // Progress bar
@@ -48,17 +49,17 @@ async function main() {
     console.log(`Уникальных судов: ${result.uniqueCourts}`);
     console.log(`Дубликатов: ${result.duplicates}`);
     console.log(`Запросов API: ${result.queriesExecuted}`);
-    console.log(`Детализаций: ${result.detailsExpanded}`);
+    console.log(`"Горячих" префиксов: ${result.detailsExpanded}`);
 
-    console.log('\nПокрытие по регионам:');
+    console.log('\nПокрытие по регионам (ТОП-15):');
     const topRegions = Object.entries(result.byRegion)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 10);
+      .slice(0, 15);
     
     for (const [region, count] of topRegions) {
       console.log(`  ${region}: ${count} судов`);
     }
-    console.log(`  ... и ещё ${Object.keys(result.byRegion).length - 10} регионов`);
+    console.log(`  ... и ещё ${Object.keys(result.byRegion).length - 15} регионов`);
 
     console.log('\nСтатистика по типам:');
     for (const [type, count] of Object.entries(result.byType)) {
