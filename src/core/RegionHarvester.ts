@@ -10,12 +10,9 @@ export interface HarvesterConfig {
   regionCode: string;
   outputDir?: string;
   batchDelay?: number;
-  debug?: boolean; // включить debug-логирование
+  debug?: boolean;
 }
 
-/**
- * Результат сбора
- */
 export interface HarvestResult {
   regionCode: string;
   totalCourts: number;
@@ -42,23 +39,19 @@ export class RegionHarvester {
   private receivedCount: number = 0;
   private onProgress?: (current: number, total: number, message: string) => void;
 
-  private readonly COURT_TYPES: CourtType[] = [
-    'RS',
-    'MS',
-    'AS',
-    'OS',
-    'KJ',
-    'AJ',
-    'GV',
-    'OV',
-  ];
-
-  private readonly SEARCH_QUERIES = [
-    'суд',
-    'мировой',
-    'арбитраж',
-    'районный',
-  ];
+  // Карта регионов и городов для поиска
+  private readonly REGION_SEARCH_QUERIES: Record<string, string[]> = {
+    '59': [
+      'Пермь суд',
+      'Пермский край',
+      'Березники',
+      'Соликамск',
+      'Кунгур',
+      'Чайковский',
+      'Лысьва',
+      'Краснокамск',
+    ],
+  };
 
   constructor(apiClient: ApiClient, config: HarvesterConfig) {
     this.apiClient = apiClient;
@@ -79,21 +72,17 @@ export class RegionHarvester {
     console.log(`\n🌾 Запуск сбора судов для региона ${this.config.regionCode}\n`);
 
     const startTime = Date.now();
-    let currentStep = 0;
-    const totalSteps = this.COURT_TYPES.length + this.SEARCH_QUERIES.length;
+    const queries = this.REGION_SEARCH_QUERIES[this.config.regionCode];
 
-    console.log('🔍 Шаг 1: Поиск по типам судов...');
-    for (const courtType of this.COURT_TYPES) {
-      currentStep++;
-      this.reportProgress(currentStep, totalSteps, `Поиск ${courtType}`);
-      await this.searchByType(courtType);
-      await this.delay(this.config.batchDelay);
+    if (!queries) {
+      throw new Error(`Нет поисковых запросов для региона ${this.config.regionCode}`);
     }
 
-    console.log('\n🔍 Шаг 2: Поиск по ключевым словам...');
-    for (const query of this.SEARCH_QUERIES) {
-      currentStep++;
-      this.reportProgress(currentStep, totalSteps, `Поиск "${query}"`);
+    console.log(`🔍 Поиск судов по ${queries.length} запросам...\n`);
+
+    for (let i = 0; i < queries.length; i++) {
+      const query = queries[i];
+      this.reportProgress(i + 1, queries.length, `Поиск "${query}"`);
       await this.searchByQuery(query);
       await this.delay(this.config.batchDelay);
     }
@@ -129,29 +118,10 @@ export class RegionHarvester {
     return result;
   }
 
-  private async searchByType(courtType: CourtType): Promise<void> {
-    try {
-      const response = await this.apiClient.suggestCourt('', {
-        region_code: this.config.regionCode,
-        court_type: courtType,
-        count: 20,
-      });
-
-      if (this.config.debug && response.suggestions.length > 0) {
-        console.log(`\n[DEBUG] ${courtType}: получено ${response.suggestions.length} судов`);
-        console.log('[DEBUG] Примеры кодов:', response.suggestions.slice(0, 3).map(s => s.data.code).join(', '));
-      }
-
-      this.addCourts(response.suggestions.map(s => s.data));
-    } catch (error) {
-      console.error(`⚠️  Ошибка при поиске ${courtType}:`, error);
-    }
-  }
-
   private async searchByQuery(query: string): Promise<void> {
     try {
+      // Без фильтра region_code - он не работает!
       const response = await this.apiClient.suggestCourt(query, {
-        region_code: this.config.regionCode,
         count: 20,
       });
 
@@ -191,26 +161,27 @@ export class RegionHarvester {
 
   /**
    * Проверяет принадлежность суда к региону
-   * Проверяем:
-   * 1. Код суда начинается с кода региона (59RS0001)
-   * 2. Адрес содержит название региона (запасной вариант)
    */
   private belongsToRegion(court: CourtData): boolean {
+    // Проверка на null
+    if (!court.code) {
+      return false;
+    }
+
     // Основной способ: код суда
     if (court.code.startsWith(this.config.regionCode)) {
       return true;
     }
 
     // Запасной способ: поиск по адресу
-    // Для Пермского края (59) - "Перм"
     const regionNames: Record<string, string[]> = {
-      '59': ['Перм', 'Пермск'],
-      '77': ['Москв'],
-      '78': ['Санкт-Петербург'],
+      '59': ['Перм', 'перм'],
+      '77': ['Москв', 'москв'],
+      '78': ['Санкт-Петербург', 'санкт'],
     };
 
     const names = regionNames[this.config.regionCode];
-    if (names) {
+    if (names && court.address) {
       const address = court.address.toLowerCase();
       return names.some(name => address.includes(name.toLowerCase()));
     }
