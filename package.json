@@ -30,8 +30,10 @@
     "test-vs": "tsx src/examples/test-vs-search.ts",
     "harvest:full:phase8": "tsx src/examples/test-full-phase8.ts",
     "analyze-regions": "tsx src/examples/analyze-regions.ts",
-    "harvest:full:phase9b": "tsx src/examples/test-full-phase9b.ts"
-
+    "harvest:full:phase9b": "tsx src/examples/test-full-phase9b.ts",
+    "analyze-prefixes": "tsx src/examples/analyze-prefixes.ts",
+    "update": "tsx src/examples/update.ts search",
+    "update:full": "tsx src/examples/update.ts full"    
   },
   "keywords": [
     "dadata",
