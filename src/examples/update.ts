@@ -47,8 +47,29 @@ async function flushLog() {
 }
 
 // ============================================================
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// ============================================================
+
+function getPrefixStats(courtsMap: Map<string, CourtWithStatus>, prefix: string): PrefixStats | null {
+  const nums = Array.from(courtsMap.values())
+    .filter(c => c.code.startsWith(prefix))
+    .map(c => parseInt(c.code.substring(4), 10));
+  if (nums.length === 0) return null;
+  return { min: Math.min(...nums), max: Math.max(...nums), count: nums.length };
+}
+
+function getAllPrefixes(courtsMap: Map<string, CourtWithStatus>): string[] {
+  const prefixes = new Set<string>();
+  for (const court of courtsMap.values()) {
+    prefixes.add(court.code.substring(0, 4));
+  }
+  return Array.from(prefixes).sort();
+}
+
+// ============================================================
 // MAIN
 // ============================================================
+
 async function main() {
   const mode = process.argv[2] ?? 'search'; // search | full
 
@@ -66,7 +87,7 @@ async function main() {
   const dbPath = path.join(process.cwd(), 'data', 'courts_full_phase9b.json');
   const data: DatabaseFile = JSON.parse(await fs.readFile(dbPath, 'utf-8'));
 
-  // courtsMap хранит суды с статусом
+  // courtsMap хранит суды со статусом
   const courtsMap = new Map<string, CourtWithStatus>(
     data.courts.map(c => [c.code, { ...c, _status: 'existing' }])
   );
@@ -91,7 +112,7 @@ async function main() {
       return resp;
     } catch (e: any) {
       if (e.message?.includes('quota') || e.message?.includes('disabled')) {
-        log(`\n⚠️  Квота API исчерпана`);
+        log(`\n⚠️ Квота API исчерпана`);
         keysOk = await keyManager.trackRequest();
       }
       return { suggestions: [] };
@@ -109,6 +130,7 @@ async function main() {
   // ============================================================
   // ШАГ 1: ХВОСТЫ
   // ============================================================
+
   log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   log('🔍 ШАГ 1: Хвосты (MAX+1 до MAX+200)');
   log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
@@ -125,6 +147,7 @@ async function main() {
     if (!stats) continue;
 
     processedPrefixes++;
+
     let consecutive = 0;
     let foundInTail = 0;
     let currentNum = stats.max + 1;
@@ -168,6 +191,7 @@ async function main() {
   // ============================================================
   // ШАГ 2: НОВЫЕ ТЕРРИТОРИИ 90-99
   // ============================================================
+
   if (keysOk) {
     log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     log('🔍 ШАГ 2: Новые территории (регионы 90-99)');
@@ -203,11 +227,12 @@ async function main() {
   }
 
   // ============================================================
-  // ШАГ 3: ДЫРКИ
+  // ШАГ 3: ДЫРКИ (от 0000 до MAX)
   // ============================================================
+
   if (keysOk) {
     log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    log('🔍 ШАГ 3: Дырки (пропуски внутри MIN-MAX)');
+    log('🔍 ШАГ 3: Дырки (пропуски от 0000 до MAX)');
     log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     let foundInGaps = 0;
@@ -216,9 +241,9 @@ async function main() {
       if (!keysOk) break;
 
       const stats = getPrefixStats(courtsMap, prefix);
-      if (!stats || stats.max === stats.min) continue;
+      if (!stats) continue;
 
-      for (let num = stats.min; num <= stats.max && keysOk; num++) {
+      for (let num = 0; num <= stats.max && keysOk; num++) {
         const code = `${prefix}${String(num).padStart(4, '0')}`;
         if (courtsMap.has(code)) continue;
 
@@ -245,6 +270,7 @@ async function main() {
   // ============================================================
   // ШАГ 4: ОБНОВЛЕНИЕ СУЩЕСТВУЮЩИХ (только full)
   // ============================================================
+
   if (mode === 'full' && keysOk) {
     log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     log('🔍 ШАГ 4: Обновление существующих судов');
@@ -262,8 +288,6 @@ async function main() {
 
       if (resp.suggestions.length > 0) {
         const updated = resp.suggestions[0].data;
-
-        // Сравниваем без служебных полей _status и _updatedAt
         const { _status, _updatedAt, ...oldData } = court;
         const hasChanges = JSON.stringify(updated) !== JSON.stringify(oldData);
 
@@ -276,7 +300,7 @@ async function main() {
         // Суд не найден — возможно закрыт
         courtsMap.set(court.code, { ...court, _status: 'not_found', _updatedAt: TODAY });
         notFoundTotal++;
-        log(`  ⚠️  НЕ НАЙДЕН (закрыт?): ${court.code}: ${court.name}`);
+        log(`  ⚠️ НЕ НАЙДЕН (закрыт?): ${court.code}: ${court.name}`);
       }
 
       if (processedCourts % LOG_INTERVAL === 0) {
@@ -294,6 +318,7 @@ async function main() {
   // ============================================================
   // ФИНАЛЬНОЕ СОХРАНЕНИЕ
   // ============================================================
+
   await saveProgress(true);
 
   async function saveProgress(isFinal = false) {
@@ -303,6 +328,7 @@ async function main() {
 
     // 1. Сохраняем JSON (без служебных полей _status, _updatedAt)
     const cleanCourts = sortedCourts.map(({ _status, _updatedAt, ...court }) => court);
+
     const output: DatabaseFile = {
       meta: {
         totalCourts: cleanCourts.length,
@@ -371,49 +397,31 @@ async function main() {
       XLSX.writeFile(workbook, excelPath);
       log(`📊 Excel сохранён: data/courts_updated_${TODAY}.xlsx`);
     }
+
+    // ============================================================
+    // ИТОГИ
+    // ============================================================
+
+    if (isFinal) {
+      const stats = keyManager.getStats();
+      log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      log('📈 ИТОГИ ОБНОВЛЕНИЯ:');
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      log(`  Было судов:              ${initialCount}`);
+      log(`  Найдено новых:           ${foundTotal}`);
+      log(`  Обновлено существующих:  ${updatedTotal}`);
+      log(`  Не найдено (закрыты?):   ${notFoundTotal}`);
+      log(`  Стало судов:             ${courtsMap.size}`);
+      log(`  Всего запросов:          ${totalRequests}`);
+      log(`  Использовано ключей:     ${stats.keysUsed}`);
+      log(`  Осталось ключей:         ${stats.keysRemaining}`);
+      log(`  Лог:                     ${logPath}`);
+      log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+      await keyManager.shutdown();
+      await flushLog();
+    }
   }
-
-  // ============================================================
-  // ИТОГИ
-  // ============================================================
-  const stats = keyManager.getStats();
-
-  log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  log('📈 ИТОГИ ОБНОВЛЕНИЯ:');
-  log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  log(`  Было судов:              ${initialCount}`);
-  log(`  Найдено новых:           ${foundTotal}`);
-  log(`  Обновлено существующих:  ${updatedTotal}`);
-  log(`  Не найдено (закрыты?):   ${notFoundTotal}`);
-  log(`  Стало судов:             ${courtsMap.size}`);
-  log(`  Всего запросов:          ${totalRequests}`);
-  log(`  Использовано ключей:     ${stats.keysUsed}`);
-  log(`  Осталось ключей:         ${stats.keysRemaining}`);
-  log(`  Лог:                     ${logPath}`);
-  log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-
-  await keyManager.shutdown();
-  await flushLog();
-}
-
-// ============================================================
-// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-// ============================================================
-function getPrefixStats(courtsMap: Map<string, CourtWithStatus>, prefix: string): PrefixStats | null {
-  const nums = Array.from(courtsMap.values())
-    .filter(c => c.code.startsWith(prefix))
-    .map(c => parseInt(c.code.substring(4), 10));
-
-  if (nums.length === 0) return null;
-  return { min: Math.min(...nums), max: Math.max(...nums), count: nums.length };
-}
-
-function getAllPrefixes(courtsMap: Map<string, CourtWithStatus>): string[] {
-  const prefixes = new Set<string>();
-  for (const court of courtsMap.values()) {
-    prefixes.add(court.code.substring(0, 4));
-  }
-  return Array.from(prefixes).sort();
 }
 
 main().catch(console.error);
