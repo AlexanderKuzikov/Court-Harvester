@@ -123,3 +123,4 @@ dist/
 
 # API Keys folder
 keys/
+*.json
