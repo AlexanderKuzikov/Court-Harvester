@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '../env';
 import { KeyRotationManager } from '../core/KeyRotationManager';
 import path from 'path';
 

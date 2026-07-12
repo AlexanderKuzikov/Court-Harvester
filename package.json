@@ -1,6 +1,6 @@
 {
   "name": "court-harvester",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CLI-утилита для сбора справочника судов РФ через API DaData",
   "main": "dist/index.js",
   "type": "module",
@@ -22,7 +22,6 @@
     "example:test-harvester": "tsx src/examples/test-harvester.ts",
     "example:test-pagination": "tsx src/examples/test-pagination.ts",
     "test": "vitest",
-    "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "check-ai": "tsx src/examples/check-ai-courts.ts",
     "sort-export": "tsx src/examples/sort-and-export.ts",
@@ -33,36 +32,26 @@
     "harvest:full:phase9b": "tsx src/examples/test-full-phase9b.ts",
     "analyze-prefixes": "tsx src/examples/analyze-prefixes.ts",
     "update": "tsx src/examples/update.ts search",
-    "update:full": "tsx src/examples/update.ts full"    
+    "update:full": "tsx src/examples/update.ts full"
   },
-  "keywords": [
-    "dadata",
-    "courts",
-    "russia",
-    "harvester",
-    "cli"
-  ],
+  "keywords": ["dadata", "courts", "russia", "harvester", "cli"],
   "author": "AlexanderKuzikov",
   "license": "Apache-2.0",
   "dependencies": {
-    "axios": "^1.7.9",
+    "axios": "^1.18.1",
     "axios-retry": "^4.5.0",
     "bottleneck": "^2.19.5",
-    "commander": "^12.1.0",
-    "dotenv": "^16.4.7",
+    "commander": "^15.0.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@types/node": "^22.19.11",
-    "@typescript-eslint/eslint-plugin": "^8.20.0",
-    "@typescript-eslint/parser": "^8.20.0",
-    "eslint": "^9.18.0",
-    "prettier": "^3.4.2",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "@types/node": "^24.13.3",
+    "prettier": "^3.9.5",
+    "tsx": "^4.23.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=24.0.0"
   }
 }

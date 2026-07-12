@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '../env';
 import { ApiClient, QuotaExceededError, DaDataApiError } from '../core/ApiClient';
 
 /**

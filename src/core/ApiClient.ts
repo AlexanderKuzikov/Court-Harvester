@@ -139,12 +139,13 @@ export class ApiClient {
       console.error('[ApiClient] Bottleneck error:', error);
     });
 
-    this.limiter.on('failed', async (error, jobInfo) => {
+    this.limiter.on('failed', async (_error, jobInfo) => {
       const retryDelay = 200 * (jobInfo.retryCount + 1); // прогрессивная задержка
       if (jobInfo.retryCount < this.config.maxRetries) {
         console.log(`[ApiClient] Retrying job ${jobInfo.options.id}, attempt ${jobInfo.retryCount + 1}`);
         return retryDelay;
       }
+      return undefined; // не повторять — исчерпаны попытки
     });
 
     this.limiter.on('depleted', () => {

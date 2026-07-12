@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '../env';
 import { ApiClient } from '../core/ApiClient';
 
 async function main() {

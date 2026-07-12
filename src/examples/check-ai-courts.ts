@@ -1,5 +1,5 @@
 // src/examples/check-ai-courts.ts
-import 'dotenv/config';
+import '../env';
 import { ApiClient } from '../core/ApiClient';
 import { promises as fs } from 'fs';
 import path from 'path';

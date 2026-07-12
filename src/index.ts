@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import 'dotenv/config';
+import './env';
 import { ApiClient } from './core/ApiClient';
 import { RegionHarvester } from './core/RegionHarvester';
 

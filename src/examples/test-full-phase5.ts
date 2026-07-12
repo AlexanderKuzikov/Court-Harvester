@@ -1,5 +1,5 @@
 // src/examples/test-full-phase5.ts
-import 'dotenv/config';
+import '../env';
 import { ApiClient } from '../core/ApiClient';
 import { FullHarvester } from '../core/FullHarvester';
 import { promises as fs } from 'fs';

@@ -1,5 +1,5 @@
 import { ApiClient } from './ApiClient';
-import { CourtData, CourtType } from '../types/dadata';
+import { CourtData } from '../types/dadata';
 import { promises as fs } from 'fs';
 import path from 'path';
 

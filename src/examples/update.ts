@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '../env';
 import { KeyRotationManager } from '../core/KeyRotationManager';
 import { promises as fs } from 'fs';
 import path from 'path';
